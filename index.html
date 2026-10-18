@@ -742,7 +742,12 @@ a { color: inherit; }
         throw { code: "upstream_error", detail: (info && info.detail) || ("Worker replied " + r.status + (info && info.error ? ": " + info.error : "")) };
       }
       var data; try { data = await r.json(); } catch (e) { throw { code: "upstream_error" }; }
-      return parseLoose(String(data && data.text || ""));
+      var txt = String(data && data.text || "");
+      try { return parseLoose(txt); }
+      catch (e) {
+        var why = data && data.stop === "max_tokens" ? "The plan was too long and got cut off. Try fewer days or a shorter trip." : "Claude's reply started: " + txt.slice(0, 80).replace(/\s+/g, " ");
+        throw { code: "invalid_json", detail: why };
+      }
     };
     return f;
   }
