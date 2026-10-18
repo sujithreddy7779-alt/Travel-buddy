@@ -540,14 +540,15 @@ a { color: inherit; }
     stopMsgs();
     msgTimer = setInterval(function () { i = (i + 1) % m.length; $("loadMsg").textContent = m[i]; }, 2400);
   }
-  function errCopy(code) {
-    return {
+  function errCopy(code, detail) {
+    var base = {
       not_granted: "Travel Buddy needs your OK to ask Claude for a plan. Press Try again and allow it.",
       rate_limited: "Too many requests right now. Wait a minute, then try again.",
       sampling_disabled: "Claude isn't available for this account.",
       session_expired: "Your session expired. Sign in again, then try again.",
       invalid_json: "The plan came back in a shape Travel Buddy couldn't read. Try again."
     }[code] || "Something interrupted the plan. Try again.";
+    return detail ? base + " (" + detail + ")" : base;
   }
 
   /* ---------- plan the trip ---------- */
@@ -576,7 +577,7 @@ a { color: inherit; }
     } catch (e) {
       stopMsgs(); ctl = null;
       if (e && e.code === "cancelled") { show("p1"); return; }
-      setLoading(true, "Couldn't plan the trip", errCopy(e && e.code), "Try again");
+      setLoading(true, "Couldn't plan the trip", errCopy(e && e.code, e && e.detail), "Try again");
       stopMsgs();
     }
   }
@@ -614,7 +615,7 @@ a { color: inherit; }
     await Promise.all([work, sleep(600)]);
     if (fail || !next) {
       flow.classList.remove("out");
-      $("status").textContent = errCopy(fail && fail.code); toast("");
+      $("status").textContent = errCopy(fail && fail.code, fail && fail.detail); toast("");
       btn.disabled = false; return;
     }
     plan = next; renderPlan(plan, prev);
@@ -733,10 +734,13 @@ a { color: inherit; }
         r = await fetch(WORKER_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: prompt }), signal: opts && opts.signal });
       } catch (e) {
         if (e && e.name === "AbortError") throw { code: "cancelled" };
-        throw { code: "upstream_error" };
+        throw { code: "upstream_error", detail: "Could not reach the Worker. Check the Worker address or CORS." };
       }
       if (r.status === 429) throw { code: "rate_limited" };
-      if (!r.ok) throw { code: "upstream_error" };
+      if (!r.ok) {
+        var info = null; try { info = await r.json(); } catch (e) {}
+        throw { code: "upstream_error", detail: (info && info.detail) || ("Worker replied " + r.status + (info && info.error ? ": " + info.error : "")) };
+      }
       var data; try { data = await r.json(); } catch (e) { throw { code: "upstream_error" }; }
       return parseLoose(String(data && data.text || ""));
     };
