@@ -366,6 +366,8 @@ a { color: inherit; }
     airbnb: { label: "Airbnb", color: "var(--pink)" },
     note: { label: "Your request", color: "var(--ink-soft)" }
   };
+  // After you deploy the Cloudflare Worker, paste its address between the quotes, e.g. "https://travel-buddy.your-name.workers.dev"
+  var WORKER_URL = "https://travel-buddy.sujithreddy7779.workers.dev/";
   var sampleFn = null, trip = null, plan = null, ctl = null, isExample = false, msgTimer = null;
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -713,9 +715,41 @@ a { color: inherit; }
     $("tripForm").scrollIntoView({ behavior: "smooth", block: "center" });
   });
 
+  /* ---------- Claude through the Cloudflare Worker (used outside claude.ai) ---------- */
+  function parseLoose(t) {
+    try { return JSON.parse(t); } catch (e) {}
+    var m = t.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (m) { try { return JSON.parse(m[1]); } catch (e) {} }
+    var a = t.search(/[\[{]/), b = Math.max(t.lastIndexOf("}"), t.lastIndexOf("]"));
+    if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch (e) {} }
+    throw { code: "invalid_json" };
+  }
+  function workerSample() {
+    var f = function () { return Promise.reject({ code: "capability_removed" }); };
+    f.viaWorker = true;
+    f.json = async function (prompt, opts) {
+      var r;
+      try {
+        r = await fetch(WORKER_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: prompt }), signal: opts && opts.signal });
+      } catch (e) {
+        if (e && e.name === "AbortError") throw { code: "cancelled" };
+        throw { code: "upstream_error" };
+      }
+      if (r.status === 429) throw { code: "rate_limited" };
+      if (!r.ok) throw { code: "upstream_error" };
+      var data; try { data = await r.json(); } catch (e) { throw { code: "upstream_error" }; }
+      return parseLoose(String(data && data.text || ""));
+    };
+    return f;
+  }
+
   /* ---------- wire up ---------- */
-  var samplePromise = (window.claude && window.claude.use) ? window.claude.use("sample").catch(function () { return null; }) : Promise.resolve(null);
-  samplePromise.then(function (s) { sampleFn = s; $("aiHint").hidden = !s; });
+  var claudeSample = (window.claude && window.claude.use) ? window.claude.use("sample").catch(function () { return null; }) : Promise.resolve(null);
+  var samplePromise = claudeSample.then(function (s) { return s || (WORKER_URL ? workerSample() : null); });
+  samplePromise.then(function (s) {
+    sampleFn = s; $("aiHint").hidden = !s;
+    if (s && s.viaWorker) $("aiHint").textContent = "Plans are written by Claude when you press the button.";
+  });
 
   function isoLocal(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
   var today = new Date(), dow = today.getDay(), toSat = ((6 - dow + 7) % 7) || 7;
