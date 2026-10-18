@@ -205,6 +205,10 @@ a { color: inherit; }
 .field input[type=date]::-webkit-date-and-time-value { text-align: left; min-width: 0; }
 @media (max-width: 560px) { .row2 { grid-template-columns: minmax(0, 1fr); } }
 
+.note { margin: -4px 0 0; color: var(--ink-soft); font-size: 13px; font-weight: 600; }
+.leg.or::before { content: none; }
+.leg.or { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; opacity: 1; color: #fff; }
+
 /* discover panel */
 .front { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin: -56px 10px 0; position: relative; }
 .front .pass { margin: 0; }
@@ -246,11 +250,6 @@ a { color: inherit; }
   <div class="hero">
     <h1 id="h-hero">Where to next?</h1>
     <p>Tell Travel Buddy where you're leaving from and where you're going. It maps out the scenic stops, drives, meals, coffee and a place to sleep.</p>
-    <div class="photo-ctl">
-      <button type="button" class="ghost-sm" id="photoBtn">Change background photo</button>
-      <button type="button" class="ghost-sm" id="photoClr" hidden>Use default photo</button>
-      <input id="photoIn" type="file" accept="image/*" hidden>
-    </div>
   </div>
 
   <div class="front">
@@ -264,6 +263,7 @@ a { color: inherit; }
         <div class="field"><label class="mono" for="depart">Leave</label><input id="depart" type="date"></div>
         <div class="field"><label class="mono" for="ret">Return</label><input id="ret" type="date"></div>
       </div>
+      <p class="note">Maximum trip length: 7 days.</p>
       <div class="field">
         <span class="lab mono" id="modeLab">How are you getting there?</span>
         <div class="modes" role="radiogroup" aria-labelledby="modeLab">
@@ -480,7 +480,9 @@ a { color: inherit; }
         var T = TYPES[s.type], key = s.type + "|" + s.name.toLowerCase();
         used[T.label] = 1;
         var fresh = prevKeys && !prevKeys[key];
-        if (i > 0 && s.leg) html += '<div class="stop-wrap leg-row"><div class="spine"><div class="line"></div></div><div class="leg">' + esc(s.leg) + "</div></div>";
+        var prevT = i > 0 ? d.stops[i - 1].type : "";
+        if ((s.type === "airbnb" && prevT === "hotel") || (s.type === "hotel" && prevT === "airbnb")) html += '<div class="stop-wrap leg-row"><div class="spine"><div class="line"></div></div><div class="leg or">or</div></div>';
+        else if (i > 0 && s.leg) html += '<div class="stop-wrap leg-row"><div class="spine"><div class="line"></div></div><div class="leg">' + esc(s.leg) + "</div></div>";
         html += '<div class="stop-wrap"><div class="spine"><span class="dot" style="--c:' + T.color + '"></span><div class="line"></div></div>';
         html += '<article class="card" style="--c:' + T.color + '">' + (fresh ? '<span class="new">Updated</span>' : "");
         html += '<div class="row1"><h4>' + esc(s.name) + '</h4><span class="tag">' + esc(T.label) + '</span></div>';
@@ -631,37 +633,7 @@ a { color: inherit; }
     $("changeText").value = ""; btn.disabled = false;
   }
 
-  /* ---------- background photo ---------- */
-  var root = document.documentElement;
-  function applyPhoto(url) {
-    $("bg").style.backgroundImage = 'url("' + url + '")';
-    $("photoClr").hidden = false;
-  }
-  function clearPhoto() {
-    $("bg").style.backgroundImage = "";
-    $("photoClr").hidden = true;
-    try { localStorage.removeItem("tb-photo"); } catch (e) {}
-  }
-  $("photoBtn").addEventListener("click", function () { $("photoIn").click(); });
-  $("photoClr").addEventListener("click", clearPhoto);
-  $("photoIn").addEventListener("change", function () {
-    var f = this.files && this.files[0]; if (!f) return;
-    var fr = new FileReader();
-    fr.onload = function () {
-      var img = new Image();
-      img.onload = function () {
-        var k = Math.min(1, 1800 / Math.max(img.width, img.height)), c = document.createElement("canvas");
-        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-        var url = c.toDataURL("image/jpeg", 0.82);
-        applyPhoto(url);
-        try { localStorage.setItem("tb-photo", url); } catch (e) {}
-      };
-      img.src = fr.result;
-    };
-    fr.readAsDataURL(f);
-  });
-  try { var sp = localStorage.getItem("tb-photo"); if (sp) applyPhoto(sp); } catch (e) {}
+  try { localStorage.removeItem("tb-photo"); } catch (e) {}
 
   /* ---------- not sure where to go ---------- */
   var discCtl = null, picked = -1, places = [];
@@ -778,6 +750,8 @@ a { color: inherit; }
     er.hidden = true;
     if (!o || !d) { er.textContent = "Enter both a starting point and a destination."; er.hidden = false; return; }
     if (!a || !b || b < a) { er.textContent = "Pick a leave date, and a return date on or after it."; er.hidden = false; return; }
+    var span = Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / 86400000) + 1;
+    if (span > 7) { er.textContent = "Trips can be up to 7 days. Your dates cover " + span + " days, so move the return date earlier."; er.hidden = false; return; }
     trip = { origin: o, dest: d, depart: a, ret: b, mode: m ? m.value : "Car" };
     runPlan();
   });
