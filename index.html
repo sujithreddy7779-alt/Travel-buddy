@@ -423,6 +423,9 @@ a { color: inherit; }
 
   /* ---------- plan data ---------- */
   function normalize(p) {
+    if (Array.isArray(p)) p = { days: p };
+    if (p && !Array.isArray(p.days)) { var w = p.plan || p.itinerary || p.trip; if (w && typeof w === "object") p = Array.isArray(w) ? { days: w } : w; }
+    if (p && Array.isArray(p.days)) p.days = p.days.map(function (d) { if (d && !Array.isArray(d.stops)) { var a = d.activities || d.items || d.places; if (Array.isArray(a)) d.stops = a; } return d; });
     if (!p || !Array.isArray(p.days) || !p.days.length) throw { code: "invalid_json" };
     var days = p.days.slice(0, 10).map(function (d, i) {
       var stops = (Array.isArray(d.stops) ? d.stops : []).slice(0, 10).map(function (s) {
@@ -548,7 +551,7 @@ a { color: inherit; }
       session_expired: "Your session expired. Sign in again, then try again.",
       invalid_json: "The plan came back in a shape Travel Buddy couldn't read. Try again."
     }[code] || "Something interrupted the plan. Try again.";
-    return detail ? base + " (" + detail + ")" : base;
+    return detail ? base + " (" + detail + ") [page v3]" : base + " [page v3]";
   }
 
   /* ---------- plan the trip ---------- */
@@ -572,7 +575,9 @@ a { color: inherit; }
           if (n) $("loadTitle").textContent = "Writing day " + Math.min(n, total) + " of " + total;
         }
       });
-      plan = normalize(raw); ctl = null; stopMsgs();
+      try { plan = normalize(raw); }
+      catch (ne) { var pv = ""; try { pv = JSON.stringify(raw).slice(0, 140); } catch (x) {} throw { code: "invalid_json", detail: "Claude returned: " + pv }; }
+      ctl = null; stopMsgs();
       setLoading(false); $("result").hidden = false; renderPlan(plan, null); window.scrollTo(0, 0);
     } catch (e) {
       stopMsgs(); ctl = null;
