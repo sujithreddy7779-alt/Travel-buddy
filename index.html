@@ -9,6 +9,23 @@
 body { margin: 0; font: 14px system-ui, sans-serif; }
 img { max-width: 100%; }
 [hidden] { display: none !important; }
+
+/* export to PDF */
+.headrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+@media print {
+  @page { margin: 14mm; }
+  html, body { background: #fff !important; }
+  * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; box-shadow: none !important; text-shadow: none !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #bg, #page1, .bar, #loading, .dock, #toast, #pdfBtn, #legend { display: none !important; }
+  #page2, #result { display: block !important; max-width: none !important; }
+  #page2 *, .head p { color: #111 !important; }
+  #page2 a { color: #0645ad !important; text-decoration: underline; }
+  .head, .day, .card, .pill { background: #fff !important; border-color: #c9ced6 !important; }
+  .day { padding: 8px 12px 4px !important; margin-bottom: 14px !important; }
+  .stop-wrap, .day-head { break-inside: avoid; page-break-inside: avoid; }
+  .line { border-left-color: #c9ced6 !important; }
+  .tag, .leg, .sub, .mono { color: #444 !important; }
+}
 </style>
 <title>Travel Buddy</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -324,7 +341,7 @@ a { color: inherit; }
 
   <div id="result" hidden>
     <div class="head">
-      <span class="mono" id="routeLab" style="color:var(--link)"></span>
+      <div class="headrow"><span class="mono" id="routeLab" style="color:var(--link)"></span><button type="button" class="ghost-sm" id="pdfBtn">Save as PDF</button></div>
       <h2 id="planTitle"></h2>
       <p id="planSummary"></p>
       <div class="meta" id="planMeta"></div>
@@ -634,6 +651,16 @@ a { color: inherit; }
   }
 
   try { localStorage.removeItem("tb-photo"); } catch (e) {}
+
+  /* ---------- save as PDF ---------- */
+  var oldTitle = document.title;
+  $("pdfBtn").addEventListener("click", function () {
+    if (!plan) return;
+    oldTitle = document.title;
+    document.title = (plan.title || "Trip plan") + " - Travel Buddy";
+    try { window.print(); } catch (e) { toast("Printing is blocked here. Open the site in its own tab and try again."); }
+  });
+  window.addEventListener("afterprint", function () { document.title = oldTitle; });
 
   /* ---------- not sure where to go ---------- */
   var discCtl = null, picked = -1, places = [];
